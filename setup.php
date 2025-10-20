@@ -231,8 +231,7 @@ function plugin_version_fields()
         'requirements' => [
             'glpi' => [
                 'min' => PLUGIN_FIELDS_MIN_GLPI,
-                'max' => PLUGIN_FIELDS_MAX_GLPI,
-                'dev' => true, //Required to allow 9.2-dev
+                'max' => PLUGIN_FIELDS_MAX_GLPI
             ],
         ],
     ];
