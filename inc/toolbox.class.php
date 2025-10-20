@@ -231,6 +231,7 @@ class PluginFieldsToolbox
             PassiveDCEquipment::class,
             Cable::class,
             Socket::class,
+            \Glpi\CustomAsset\HXAPAsset::class,
         ];
 
         $assistance_itemtypes = [
