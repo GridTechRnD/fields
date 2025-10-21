@@ -1246,6 +1246,24 @@ JAVASCRIPT
 
         unset($_SESSION['plugin']['fields']['values_sent']);
 
+        // Add tab label above tab content
+        if (!$massiveaction && $show_table) {
+            $tab_data = [
+                'itemtype' => PluginFieldsContainer::getType(),
+                'id'       => $container_obj->getID(),
+                'label'    => $container_obj->fields['label'],
+            ];
+            $tab_label = PluginFieldsLabelTranslation::getLabelFor($tab_data);
+            $tab_html = "<table class=\"tab_cadre_fixehov\">
+                <thead>
+                    <tr style=\"text-align: center;\" class=\"noHover\">
+                        <th colspan=\"4\">" . htmlspecialchars($tab_label) . "</th>
+                    </tr>
+                </thead>
+            </table>";
+            return $tab_html . $html;
+        }
+        
         return $html;
     }
 
