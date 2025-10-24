@@ -150,72 +150,104 @@ class PluginFieldsContainer extends CommonDBTM
             $migration->migrationOneTable($table);
         }
 
-        // Get itemtypes from PluginGenericobject
-        if ($DB->tableExists('glpi_plugin_genericobject_types')) {
-            // Check GenericObject version
-            $genericobject_info = Plugin::getInfo('genericobject');
-            if (version_compare($genericobject_info['version'] ?? '0', '3.0.0', '<')) {
-                throw new RuntimeException(
-                    'GenericObject plugin cannot be migrated. Please update it to the latest version.',
-                );
-            }
 
-            // Check glpi_plugin_genericobject_types table
-            if (!$DB->fieldExists('glpi_plugin_genericobject_types', 'itemtype')) {
-                throw new RuntimeException(
-                    'Integrity error on the glpi_plugin_genericobject_types table from the GenericObject plugin.',
-                );
-            }
+        // Get containers with PluginGenericobject itemtype
+        $data = $DB->request([
+            'FROM'   => $table,
+            'WHERE'  => [
+                new QueryExpression(
+                    $table . ".itemtypes LIKE '%PluginGenericobject%'",
+                ),
+            ],
+        ]);
 
-            $migration_genericobject_itemtype = [];
-            $result = $DB->request(['FROM' => 'glpi_plugin_genericobject_types']);
-            foreach ($result as $type) {
-                $migration_genericobject_itemtype[$type['itemtype']] = [
-                    'genericobject_itemtype' => $type['itemtype'],
-                    'itemtype' => 'Glpi\CustomAsset\\' . $type['name'] . 'Asset',
-                    'genericobject_name' => $type['name'],
-                    'name' => $type['name'] . 'Asset',
-                ];
-            }
+        if (count($data) > 0) {
 
-            // Get containers with PluginGenericobject itemtype
-            $result = $DB->request([
-                'FROM'   => $table,
-                'WHERE'  => [
-                    new QueryExpression(
-                        $table . ".itemtypes LIKE '%PluginGenericobject%'",
-                    ),
-                ],
-            ]);
-
-            $container_class = new self();
-            foreach ($result as $container) {
-                self::generateTemplate($container);
-                foreach (json_decode($container['itemtypes']) as $itemtype) {
-                    $classname = self::getClassname($itemtype, $container["name"]);
-                    $old_table = $classname::getTable();
-                    // Rename genericobject container table
-                    if (
-                        $DB->tableExists($old_table) &&
-                        isset($migration_genericobject_itemtype[$itemtype]) &&
-                        str_contains($old_table, 'glpi_plugin_fields_plugingenericobject' . $migration_genericobject_itemtype[$itemtype]['genericobject_name'])
-                    ) {
-                        $new_table = str_replace('plugingenericobject' . $migration_genericobject_itemtype[$itemtype]['genericobject_name'], 'glpicustomasset' . strtolower($migration_genericobject_itemtype[$itemtype]['name']), $old_table);
-                        $migration->renameTable($old_table, $new_table);
-                    }
+            // Get itemtypes from PluginGenericobject
+            if ($DB->tableExists('glpi_plugin_genericobject_types')) {
+                // Check GenericObject version
+                $genericobject_info = Plugin::getInfo('genericobject');
+                if (version_compare($genericobject_info['version'] ?? '0', '3.0.0', '<')) {
+                    throw new RuntimeException(
+                        'GenericObject plugin cannot be migrated. Please update it to the latest version.',
+                    );
                 }
-                // Update old genericobject itemtypes in container
-                $map = array_column($migration_genericobject_itemtype, 'itemtype', 'genericobject_itemtype');
-                $itemtypes = strtr($container['itemtypes'], $map);
-                $container_class->update(
-                    [
-                        'id'         => $container['id'],
-                        'itemtypes'  => $itemtypes,
+
+                // Check glpi_plugin_genericobject_types table
+                if (!$DB->fieldExists('glpi_plugin_genericobject_types', 'itemtype')) {
+                    throw new RuntimeException(
+                        'Integrity error on the glpi_plugin_genericobject_types table from the GenericObject plugin.',
+                    );
+                }
+
+                $migration_genericobject_itemtype = [];
+                $result = $DB->request([
+                    'FROM' => 'glpi_plugin_genericobject_types',
+                    'WHERE'  => [
+                        new QueryExpression(
+                            $table . ".itemtypes LIKE '%PluginGenericobject%'",
+                        ),
                     ],
+                ]);
+
+                foreach ($result as $type) {
+                    $customasset_classname = 'Glpi\\\\CustomAsset\\\\' . $type['name'] . 'Asset';
+                    if (str_ends_with($type['itemtype'], 'Model')) {
+                        $customasset_classname = 'Glpi\\\\CustomAsset\\\\' . $type['name'] . 'AssetModel';
+                    } elseif (str_ends_with($type['itemtype'], 'Type')) {
+                        $customasset_classname = 'Glpi\\\\CustomAsset\\\\' . $type['name'] . 'AssetType';
+                    }
+
+                    $migration_genericobject_itemtype[$type['itemtype']] = [
+                        'genericobject_itemtype' => $type['itemtype'],
+                        'itemtype' => $customasset_classname,
+                        'genericobject_name' => $type['name'],
+                        'name' => $type['name'] . 'Asset',
+                    ];
+                }
+
+                // Get containers with PluginGenericobject itemtype
+                $result = $DB->request([
+                    'FROM'   => $table,
+                    'WHERE'  => [
+                        new QueryExpression(
+                            $table . ".itemtypes LIKE '%PluginGenericobject%'",
+                        ),
+                    ],
+                ]);
+
+                $container_class = new self();
+                foreach ($result as $container) {
+                    self::generateTemplate($container);
+                    foreach (json_decode($container['itemtypes']) as $itemtype) {
+                        $classname = self::getClassname($itemtype, $container["name"]);
+                        $old_table = $classname::getTable();
+                        // Rename genericobject container table
+                        if (
+                            $DB->tableExists($old_table) &&
+                            isset($migration_genericobject_itemtype[$itemtype]) &&
+                            str_contains($old_table, 'glpi_plugin_fields_plugingenericobject' . $migration_genericobject_itemtype[$itemtype]['genericobject_name'])
+                        ) {
+                            $new_table = str_replace('plugingenericobject' . $migration_genericobject_itemtype[$itemtype]['genericobject_name'], 'glpicustomasset' . strtolower($migration_genericobject_itemtype[$itemtype]['name']), $old_table);
+                            $migration->renameTable($old_table, $new_table);
+                        }
+                    }
+                    // Update old genericobject itemtypes in container
+                    $map = array_column($migration_genericobject_itemtype, 'itemtype', 'genericobject_itemtype');
+                    $itemtypes = strtr($container['itemtypes'], $map);
+                    $container_class->update(
+                        [
+                            'id'         => $container['id'],
+                            'itemtypes'  => $itemtypes,
+                        ],
+                    );
+                }
+            } else {
+                throw new RuntimeException(
+                    'The Fields plugin is referencing a GenericObject class, but the corresponding table glpi_plugin_genericobject_types could not be found in the database.',
                 );
             }
         }
-
         return true;
     }
 
@@ -239,7 +271,7 @@ class PluginFieldsContainer extends CommonDBTM
         foreach ($containers as $container) {
             $itemtypes = [];
             if (!empty($container['itemtypes'])) {
-                $decoded = json_decode($container['itemtypes'], true);
+                $decoded = PluginFieldsToolbox::decodeJSONItemtypes($container['itemtypes'], true);
                 if (is_array($decoded)) {
                     $itemtypes = $decoded;
                 }
@@ -290,7 +322,7 @@ class PluginFieldsContainer extends CommonDBTM
 
                 // Update container name
                 $new_name = $toolbox->getSystemNameFromLabel($container['label']);
-                foreach (json_decode($container['itemtypes']) as $itemtype) {
+                foreach (PluginFieldsToolbox::decodeJSONItemtypes($container['itemtypes']) as $itemtype) {
                     while (strlen(getTableForItemType(self::getClassname($itemtype, $new_name))) > 64) {
                         // limit tables names to 64 chars (MySQL limit)
                         $new_name = substr($new_name, 0, -1);
@@ -304,7 +336,7 @@ class PluginFieldsContainer extends CommonDBTM
                 );
 
                 // Rename container tables and itemtype if needed
-                foreach (json_decode($container['itemtypes']) as $itemtype) {
+                foreach (PluginFieldsToolbox::decodeJSONItemtypes($container['itemtypes']) as $itemtype) {
                     $migration->renameItemtype(
                         self::getClassname($itemtype, $old_name),
                         self::getClassname($itemtype, $new_name),
@@ -640,7 +672,7 @@ class PluginFieldsContainer extends CommonDBTM
             $found = $this->find(['type' => 'dom']);
             if (count($found) > 0) {
                 foreach (array_column($found, 'itemtypes') as $founditemtypes) {
-                    foreach (json_decode($founditemtypes) as $founditemtype) {
+                    foreach (PluginFieldsToolbox::decodeJSONItemtypes($founditemtypes) as $founditemtype) {
                         if (in_array($founditemtype, $input['itemtypes'])) {
                             Session::AddMessageAfterRedirect(__("You cannot add several blocks with type 'Insertion in the form' on same object", 'fields'), false, ERROR);
 
@@ -656,7 +688,7 @@ class PluginFieldsContainer extends CommonDBTM
             $found = $this->find(['type' => 'domtab', 'subtype' => $input['subtype']]);
             if (count($found) > 0) {
                 foreach (array_column($found, 'itemtypes') as $founditemtypes) {
-                    foreach (json_decode($founditemtypes) as $founditemtype) {
+                    foreach (PluginFieldsToolbox::decodeJSONItemtypes($founditemtypes) as $founditemtype) {
                         if (in_array($founditemtype, $input['itemtypes'])) {
                             Session::AddMessageAfterRedirect(__("You cannot add several blocks with type 'Insertion in the form of a specific tab' on same object tab", 'fields'), false, ERROR);
 
@@ -688,7 +720,7 @@ class PluginFieldsContainer extends CommonDBTM
         $found = $this->find(['name' => $input['name']]);
         if (count($found) > 0) {
             foreach (array_column($found, 'itemtypes') as $founditemtypes) {
-                foreach (json_decode($founditemtypes) as $founditemtype) {
+                foreach (PluginFieldsToolbox::decodeJSONItemtypes($founditemtypes) as $founditemtype) {
                     if (in_array($founditemtype, $input['itemtypes'])) {
                         Session::AddMessageAfterRedirect(__('You cannot add several blocs with identical name on same object', 'fields'), false, ERROR);
 
@@ -781,7 +813,7 @@ class PluginFieldsContainer extends CommonDBTM
 
         $_SESSION['delete_container'] = true;
 
-        foreach (json_decode($this->fields['itemtypes']) as $itemtype) {
+        foreach (PluginFieldsToolbox::decodeJSONItemtypes($this->fields['itemtypes']) as $itemtype) {
             $classname          = self::getClassname($itemtype, $this->fields['name']);
             $sysname            = self::getSystemName($itemtype, $this->fields['name']);
             $class_filename     = $sysname . '.class.php';
@@ -843,10 +875,9 @@ class PluginFieldsContainer extends CommonDBTM
         $containers         = new self();
         $founded_containers = $containers->find();
         foreach ($founded_containers as $container) {
-            $itemtypes = json_decode($container['itemtypes']);
+            $itemtypes = PluginFieldsToolbox::decodeJSONItemtypes($container['itemtypes']);
             if (in_array($itemtype, $itemtypes)) {
-                $classname = 'PluginFields' . $itemtype . getSingular($container['name']);
-                $classname = preg_replace('/s{2}$/i', 's', $classname); // in case name ends with 'ss' remove last 's'
+                $classname = self::getClassname($itemtype, $container['name']);
                 $fields    = new $classname();
                 $fields->deleteByCriteria(['items_id' => $item->fields['id']], true);
             }
@@ -928,7 +959,7 @@ HTML;
         echo '<td>' . __('Associated item type') . ' : </td>';
         echo '<td>';
         if ($ID > 0) {
-            $types = json_decode($this->fields['itemtypes']);
+            $types = PluginFieldsToolbox::decodeJSONItemtypes($this->fields['itemtypes']);
             $obj   = '';
             $count = count($types);
             $i     = 1;
@@ -969,7 +1000,7 @@ HTML;
         echo '<td>';
         echo "&nbsp;<span id='subtype_$rand'></span>";
         if ($ID > 0 && !empty($this->fields['subtype'])) {
-            $itemtypes = json_decode($this->fields['itemtypes'], true);
+            $itemtypes = PluginFieldsToolbox::decodeJSONItemtypes($this->fields['itemtypes'], true);
             $itemtype  = array_shift($itemtypes);
             $dbu = new DbUtils();
             $item = $dbu->getItemForItemtype($itemtype);
@@ -1234,7 +1265,7 @@ HTML;
             foreach ($itemtypes[$item->getType()] as $tab_name => $tab_label) {
                 // needs to check if entity of item is in hierachy of $tab_name
                 foreach ($container->find(['is_active' => 1, 'name' => $tab_name]) as $data) {
-                    $dataitemtypes = json_decode($data['itemtypes']);
+                    $dataitemtypes = PluginFieldsToolbox::decodeJSONItemtypes($data['itemtypes']);
                     if (in_array(get_class($item), $dataitemtypes) != false) {
                         $entities = [$data['entities_id']];
                         if ($data['is_recursive']) {
@@ -1266,7 +1297,7 @@ HTML;
         //retrieve container for current tab
         $container = new self();
         if ($container->getFromDB($tabnum)) {
-            $dataitemtypes = json_decode($container->fields['itemtypes']);
+            $dataitemtypes = PluginFieldsToolbox::decodeJSONItemtypes($container->fields['itemtypes']);
             if (in_array(get_class($item), $dataitemtypes) != false) {
                 return PluginFieldsField::showForTabContainer($container->fields['id'], $item);
             }
@@ -2243,7 +2274,7 @@ HTML;
         if (array_key_exists('itemtypes', $input) && !empty($input['itemtypes'])) {
             // $input has been transformed with `Toolbox::addslashes_deep()`, and `self::prepareInputForAdd()`
             // is expecting an array, so it have to be unslashed then json decoded.
-            $input['itemtypes'] = json_decode($input['itemtypes']);
+            $input['itemtypes'] = PluginFieldsToolbox::decodeJSONItemtypes($input['itemtypes']);
         } else {
             unset($input['itemtypes']);
         }

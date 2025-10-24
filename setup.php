@@ -31,7 +31,7 @@
 /** @var array $CFG_GLPI */
 global $CFG_GLPI;
 
-define('PLUGIN_FIELDS_VERSION', '1.22.1');
+define('PLUGIN_FIELDS_VERSION', '1.22.2');
 
 // Minimal GLPI version, inclusive
 define('PLUGIN_FIELDS_MIN_GLPI', '11.0.0');
@@ -205,12 +205,9 @@ function plugin_init_fields()
  */
 function plugin_fields_script_endswith($scriptname)
 {
-    //append plugin directory to avoid dumb errors...
-    $scriptname  = 'fields/front/' . $scriptname;
-    $script_name = $_SERVER['SCRIPT_NAME'];
-
-    return str_ends_with($script_name, $scriptname);
+    return str_contains($_SERVER['REQUEST_URI'], $scriptname);
 }
+
 
 
 
@@ -307,7 +304,7 @@ function plugin_fields_exportBlockAsYaml($container_id = null)
         $containers    = $container_obj->find($where);
         foreach ($containers as $container) {
             $itemtypes = (strlen($container['itemtypes']) > 0)
-                ? json_decode($container['itemtypes'], true)
+                ? PluginFieldsToolbox::decodeJSONItemtypes($container['itemtypes'], true)
                 : [];
 
             foreach ($itemtypes as $itemtype) {

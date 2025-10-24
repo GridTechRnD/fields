@@ -8,9 +8,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [UNRELEASED]
 
+## [1.22.2] - 2025-10-24
+
 ### Fixed
 
+- Fix `GenericObject` Model and Type migration
+- Fix `json_decode` using class with namespace
+- Fix drag and drop
 - Increased the maximum length of the language column to support longer locale codes
+- Fix left side menu url
+- Fix purge
 
 ## [1.22.1] - 2025-10-10
 
